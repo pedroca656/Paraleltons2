@@ -5,10 +5,20 @@
 			
 // C++ program to implement wildcard 
 // pattern matching algorithm 
-#include <bits/stdc++.h> 
-#include <omp.h>
+#include <bits/stdc++.h>
+#include <stdio.h>
+#include <mpi.h>
+#include <unistd.h>
+#include <stdlib.h>
 using namespace std; 
 
+#ifndef VETSIZE
+#define VETSIZE 5000000
+#endif
+
+const char* vetor[VETSIZE];
+int resultado[VETSIZE];
+int auxbuf[VETSIZE];
 
 int countFreq(const char* pat, const char* txt) 
 { 
@@ -126,32 +136,85 @@ int main(int argc, char* argv[])
 		strcpy(filepath, argv[2]);
 		cout << "Read file " << filepath << endl;
 		
-		int row = 0;
+		int rows = 0;
 		int count = 0;
 		std::ifstream file(filepath);
 		std::string line;
 		std::stringstream l;
-		while (std::getline(file, line)) {
-			// line contains the current line
-			//cout << "count(" << line << "): " << countFreq(pattern, line.c_str()) << endl;
-			//count += countFreq(pattern, line.c_str());
-			l << line;
+		
+		//iniciando mpi
+		
+		int size, rank;
+		int val;
+		MPI_Status status;
+
+		MPI_Init(&argc, &argv);
+		MPI_Comm_size(MPI_COMM_WORLD, &size);
+		MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+
+		int chunksize = 0;//VETSIZE/size;
+		
+		//master
+		if(rank == 0){
+			//preenchendo vetor que será usado
+			while (std::getline(file, line)) {
+				// line contains the current line
+				//cout << "count(" << line << "): " << countFreq(pattern, line.c_str()) << endl;
+				//count += countFreq(pattern, line.c_str());
+				//vetor[rows] = line;
+				vetor[rows] << line;
+				rows++;
+				l << line;
+			}
+			//calcula chunksize
+			chunksize = rows/size;
+			
+			//envia chunk pra cada processo
+			for(int i=1; i<size; i++) {
+				int begin = i*chunksize;
+				MPI_Send(&vetor[begin], chunksize, MPI_INT,	i, 100, MPI_COMM_WORLD);
+			}
+			
+			// Mestre processa chunk local
+			// Verifica se valor eh primo
+			for(int i=0; i<chunksize; i++) {
+				count = countFreq(pattern, vetor[i].str().c_str());
+			}
+			
+			// Recebe respostas dos outros processos
+			for(int i=1; i<size; i++) {
+				int begin = i*chunksize;
+				MPI_Recv(&resultado[begin], chunksize, MPI_INT,	i, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
+			}
+			
+			//starttime = omp_get_wtime(); 
+			
+			//count = countFreq(pattern, l.str().c_str());
+			
+			cout << "count: " << count << endl;
+			//stoptime = omp_get_wtime();
+			printf("Tempo de execução: %3.2f segundos\n", stoptime-starttime);
 		}
-		
-		
-		starttime = omp_get_wtime(); 
-		
-		count = countFreq(pattern, l.str().c_str());
-		
-		cout << "count: " << count << endl;
-		stoptime = omp_get_wtime();
-		printf("Tempo de execução: %3.2f segundos\n", stoptime-starttime);
+		else{
+			// Recebe chunk
+			MPI_Recv(vetor, chunksize, MPI_INT, 0, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
+
+			// Processa chunk
+			for(int i=0; i<chunksize; i++) {
+				count = countFreq(pattern, vetor[i].str().c_str());
+			}
+
+			// Envia respostas
+			MPI_Send(resultado, chunksize, MPI_INT, 0, 100, MPI_COMM_WORLD);
+		}
 	}
 	
 
 	cout << "\n\nEnd !!!" << endl;
 	cout << "Pedro L. Fraga" << endl;
 	cout << "Rodrigo L. Silveira" << endl;
+	
+	MPI_Finalize();
 	
 	return 0; 
 } 
