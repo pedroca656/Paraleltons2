@@ -1,0 +1,14 @@
+2 núcleos
+ab : 4.61s
+a?b: 5.06s
+a*b: 6.97s
+
+4 núcleos
+ab : 4.58s
+a?b: 5.06s
+a*b: 6.98s
+
+8 núcleos
+ab : 4.58s
+a?b: 5.06s
+a*b: 6.97s
