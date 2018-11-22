@@ -153,6 +153,9 @@ int main(int argc, char* argv[])
 		MPI_Comm_size(MPI_COMM_WORLD, &size);
 		MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 
+		double t1,t2;
+		t1 = MPI_Wtime();  // inicia a contagem do tempo
+
 		int chunksize = 0;//VETSIZE/size;
 		
 		//master
@@ -198,8 +201,11 @@ int main(int argc, char* argv[])
 			MPI_Send(resultado, chunksize, MPI_INT, 0, 100, MPI_COMM_WORLD);
 		}
 		
+		
+		t2 = MPI_Wtime(); // termina a contagem do tempo
+		
 		cout << "count: " << count << endl;
-		printf("Tempo de execução: %3.2f segundos\n", stoptime-starttime);
+		printf("\nTempo de execucao: %f\n\n", t2-t1);
 		
 	}
 
