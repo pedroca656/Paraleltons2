@@ -10,13 +10,14 @@
 #include <mpi.h>
 #include <unistd.h>
 #include <stdlib.h>
+#include <string.h>
 using namespace std; 
 
 #ifndef VETSIZE
 #define VETSIZE 5000000
 #endif
 
-const char* vetor[VETSIZE];
+std::stringstream vetor[VETSIZE];
 int resultado[VETSIZE];
 int auxbuf[VETSIZE];
 
@@ -140,7 +141,7 @@ int main(int argc, char* argv[])
 		int count = 0;
 		std::ifstream file(filepath);
 		std::string line;
-		std::stringstream l;
+		
 		
 		//iniciando mpi
 		
@@ -158,13 +159,8 @@ int main(int argc, char* argv[])
 		if(rank == 0){
 			//preenchendo vetor que será usado
 			while (std::getline(file, line)) {
-				// line contains the current line
-				//cout << "count(" << line << "): " << countFreq(pattern, line.c_str()) << endl;
-				//count += countFreq(pattern, line.c_str());
-				//vetor[rows] = line;
 				vetor[rows] << line;
 				rows++;
-				l << line;
 			}
 			//calcula chunksize
 			chunksize = rows/size;
@@ -176,24 +172,17 @@ int main(int argc, char* argv[])
 			}
 			
 			// Mestre processa chunk local
-			// Verifica se valor eh primo
 			for(int i=0; i<chunksize; i++) {
-				count = countFreq(pattern, vetor[i].str().c_str());
+				count += countFreq(pattern, vetor[i].str().c_str());
 			}
 			
 			// Recebe respostas dos outros processos
 			for(int i=1; i<size; i++) {
 				int begin = i*chunksize;
-				MPI_Recv(&resultado[begin], chunksize, MPI_INT,	i, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
+				MPI_Recv(&resultado[i], chunksize, MPI_INT,	i, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
+				count += resultado[i];
 			}
 			
-			//starttime = omp_get_wtime(); 
-			
-			//count = countFreq(pattern, l.str().c_str());
-			
-			cout << "count: " << count << endl;
-			//stoptime = omp_get_wtime();
-			printf("Tempo de execução: %3.2f segundos\n", stoptime-starttime);
 		}
 		else{
 			// Recebe chunk
@@ -201,14 +190,18 @@ int main(int argc, char* argv[])
 
 			// Processa chunk
 			for(int i=0; i<chunksize; i++) {
-				count = countFreq(pattern, vetor[i].str().c_str());
+				count += countFreq(pattern, vetor[i].str().c_str());
 			}
+			resultado[rank] = count;
 
 			// Envia respostas
 			MPI_Send(resultado, chunksize, MPI_INT, 0, 100, MPI_COMM_WORLD);
 		}
+		
+		cout << "count: " << count << endl;
+		printf("Tempo de execução: %3.2f segundos\n", stoptime-starttime);
+		
 	}
-	
 
 	cout << "\n\nEnd !!!" << endl;
 	cout << "Pedro L. Fraga" << endl;
