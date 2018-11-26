@@ -148,15 +148,21 @@ int main(int argc, char* argv[])
 		int size, rank;
 		int val;
 		MPI_Status status;
+		
+		cout << "chegou aqui" << endl;
 
 		MPI_Init(&argc, &argv);
 		MPI_Comm_size(MPI_COMM_WORLD, &size);
 		MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+		
+		
+		cout << "size: " << size << endl;
+		cout << "rank: " << rank << endl;
 
 		double t1,t2;
 		t1 = MPI_Wtime();  // inicia a contagem do tempo
 
-		int chunksize = 0;//VETSIZE/size;
+		int chunksize = 50000/size;//VETSIZE/size;
 		
 		//master
 		if(rank == 0){
@@ -164,56 +170,98 @@ int main(int argc, char* argv[])
 			while (std::getline(file, line)) {
 				vetor[rows] << line;
 				rows++;
+				//cout << rows << endl;
+			}
+			for(int i = rows; i<VETSIZE; i++){
+				resultado[i] = 0;
+				//cout << "completando resultado: " << i << endl;
 			}
 			//calcula chunksize
-			chunksize = rows/size;
+			//chunksize = rows/size;
+			cout << "chunksize: " << chunksize << endl;
 			
 			//envia chunk pra cada processo
 			for(int i=1; i<size; i++) {
 				int begin = i*chunksize;
+				//cout << "enviando chunk para filho: " << i << endl; 
+				//cout << " com begin: " << begin << endl;
 				MPI_Send(&vetor[begin], chunksize, MPI_INT,	i, 100, MPI_COMM_WORLD);
+				//cout << "enviou" << endl;
 			}
+			
+			cout << "indo processar chunk local" << endl;
 			
 			// Mestre processa chunk local
 			for(int i=0; i<chunksize; i++) {
-				count += countFreq(pattern, vetor[i].str().c_str());
+				cout << "processando " << i << "/" << chunksize << endl;
+				resultado[i] = countFreq(pattern, vetor[i].str().c_str());
+				cout << "foi " << i << "/" << chunksize << endl;
 			}
+			
+			cout << "indo preceber respostas" << endl;
 			
 			// Recebe respostas dos outros processos
 			for(int i=1; i<size; i++) {
-				int begin = i*chunksize;
-				MPI_Recv(&resultado[i], chunksize, MPI_INT,	i, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
-				count += resultado[i];
+				//int begin = i*chunksize;
+				//MPI_Recv(&resultado[i], chunksize, MPI_INT,	i, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
+				//count += resultado[i];
+				MPI_Recv(auxbuf, chunksize, MPI_INT,
+							MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
+				int source = status.MPI_SOURCE;
+				int begin = source*chunksize;
+				memcpy(&resultado[begin], auxbuf, chunksize*sizeof(int));
 			}
 			
 		}
 		else{
+			cout << "nao eh processo 0" << endl;
+			cout << "chunksize: " << chunksize << endl;
+			
 			// Recebe chunk
-			MPI_Recv(vetor, chunksize, MPI_INT, 0, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
+			MPI_Recv(vetor, chunksize, MPI_INT, 0,
+			MPI_ANY_TAG, MPI_COMM_WORLD, &status);
+			
+			cout << "chunksize no filho: " << chunksize << endl;
 
 			// Processa chunk
-			for(int i=0; i<chunksize; i++) {
-				count += countFreq(pattern, vetor[i].str().c_str());
+			//for(int j=chunkini; j<chunksize; j++) {
+				//cout << "j:" << j << endl;
+				//cout << vetor[j].str().c_str() << endl;
+			//}
+
+			// Processa chunk
+			for(int j=chunksize*rank; j<(chunksize*(rank+1))-1; j++) {
+				//cout << "processando no filho: " << j << endl;
+				resultado[j] = countFreq(pattern, vetor[j].str().c_str());
+				//cout << "processou no filho: " << j << " " << resultado[j] << endl;
 			}
-			resultado[rank] = count;
 
 			// Envia respostas
-			MPI_Send(resultado, chunksize, MPI_INT, 0, 100, MPI_COMM_WORLD);
+			MPI_Send(resultado, chunksize, MPI_INT, 0,
+			100, MPI_COMM_WORLD);
 		}
 		
+		if(rank == 0) {
+			// Dump resultado
+			for(int i=0; i<VETSIZE; i++) {
+				count += resultado[i];
+			}
+			cout << "TOTAL: " << count << endl;
 		
-		t2 = MPI_Wtime(); // termina a contagem do tempo
 		
-		cout << "count: " << count << endl;
-		printf("\nTempo de execucao: %f\n\n", t2-t1);
+			t2 = MPI_Wtime(); // termina a contagem do tempo
+		
+			cout << "count: " << count << endl;
+			printf("\nTempo de execucao: %f\n\n", t2-t1);
+	
+			MPI_Finalize();
+		}
 		
 	}
 
 	cout << "\n\nEnd !!!" << endl;
 	cout << "Pedro L. Fraga" << endl;
 	cout << "Rodrigo L. Silveira" << endl;
-	
-	MPI_Finalize();
 	
 	return 0; 
 } 
